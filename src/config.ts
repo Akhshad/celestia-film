@@ -6,6 +6,13 @@
 // If it can't load (or WebGL is off) a flat 2D ending is shown.
 export const MODEL_URL = `${import.meta.env.BASE_URL}celestia-hall.glb`;
 
+// Where the dive to Earth lands: [longitude, latitude] of the banquet site.
+// Default is Nagpur city centre; set it to the plot's coordinates.
+export const SITE: [number, number] = [79.0882, 21.1458];
+
+// Public Mapbox token for the satellite dive (set VITE_MAPBOX_TOKEN in .env.local).
+export const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || '';
+
 // 2D fallback only: top-view photo of the hall (null = drawn placeholder).
 // Put the image in /public and use e.g. `${import.meta.env.BASE_URL}hall-top.jpg`.
 export const HALL_IMAGE: string | null = null;

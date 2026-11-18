@@ -8,13 +8,15 @@ import { LK, Lat, buildKeys } from './timeline';
 import { buildLayers } from './geo/layers';
 import { buildGalaxy, buildBG, drawBG, drawGalaxy } from './scenes/galaxy';
 import { drawSolar } from './scenes/solar';
-import { drawEarth } from './scenes/earth';
+import { drawEarth, drawEarthOverlay } from './scenes/earth';
 import { buildClouds, drawClouds } from './scenes/clouds';
 import { buildPlaceholderHall, setHall, layoutHall, drawHall, buildTextTexture, drawDrape2D } from './scenes/hall2d';
-import type { finale as FinaleT } from './finale/finale';
+type ThreeMod = typeof import('./three/index');
 
-// Three.js + the 3D finale load lazily so the 2D journey starts immediately.
-let finale: typeof FinaleT | null = null;
+// Three.js (3D space, clouds, finale) loads lazily; the 2D journey starts immediately and is the fallback.
+let T: (Omit<ThreeMod, 'Clouds'> & { clouds: InstanceType<ThreeMod['Clouds']> }) | null = null;
+const credits = document.getElementById('mapcredit') as HTMLElement;
+let creditOn = false;
 
 const stage = document.getElementById('stage') as HTMLElement;
 const hint = document.getElementById('hint') as HTMLElement;
@@ -35,12 +37,25 @@ function drawVignette() {
 function render(p: number) {
   const { W, H } = view;
   const L = Lat(p);
-  const use3D = !!finale?.ready, live3D = use3D && p > .735;
-  if (live3D) finale!.draw(p);
-  finale?.show(live3D);
+  const use3D = !!T?.finale.ready, live3D = use3D && p > .735;
+  const space3D = !!T?.space.ready && !live3D && L > LK.sun - .9 && (use3D || p < .74);
+  if (T) {
+    if (live3D) T.finale.draw(p);
+    else if (space3D) T.space.render(L);
+    if ((live3D || space3D) && p > .67 && p < .805) T.clouds.render(p, use3D);
+    T.showGL(live3D || space3D);
+    const c = space3D && T.space.tiles.visible;
+    if (c !== creditOn) { creditOn = c; credits.style.opacity = c ? '1' : '0'; }
+  }
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
   if (live3D && p > .741) ctx.clearRect(0, 0, W, H);
-  else {
+  else if (space3D) {
+    // 3D space underneath: keep the 2D layer transparent, with the galaxy remnant, stars and labels on top
+    ctx.clearRect(0, 0, W, H);
+    if (L < LK.ind + .5) drawBG(L, 1 - sstep(LK.globe + .4, LK.ind - .2, L));
+    if (L < 6.8) drawGalaxy(L);
+    drawEarthOverlay(L, p, (lon, lat) => T!.space.project(lon, lat));
+  } else {
     ctx.fillStyle = '#04050b'; ctx.fillRect(0, 0, W, H);
     if (L < LK.ind + .5) drawBG(L, 1 - sstep(LK.globe + .4, LK.ind - .2, L));
     if (L < 6.8) drawGalaxy(L);
@@ -49,7 +64,7 @@ function render(p: number) {
     if (L > LK.earth - .07 && p < .76) drawEarth(L, p);
     if (!use3D && p > .73) drawHall(p);
   }
-  if (p > .67 && p < .805) drawClouds(p, use3D);
+  if (!space3D && !live3D && p > .67 && p < .805) drawClouds(p, use3D);
   const wo = sstep(.71, .736, p) * (1 - sstep(.74, .772, p)) * .96;
   if (wo > 0) { ctx.globalAlpha = wo; ctx.fillStyle = use3D ? '#f4e2d4' : '#eef2f8'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
   ctx.globalAlpha = live3D ? .55 : 1; drawVignette(); ctx.globalAlpha = 1;
@@ -76,7 +91,7 @@ function resize() {
   Object.assign(view, { DPR, W, H, MIN: Math.min(W, H), MAX: Math.max(W, H), CX: W / 2, CY: H / 2, PORTRAIT: H > W * 1.05 });
   VIG = null;
   buildKeys(); layoutHall(); buildTextTexture(false);
-  finale?.resize();
+  if (T) { T.resizeRenderer(); T.finale.resize(); }
 }
 
 /* scroll progress, eased towards the target so the journey glides */
@@ -112,8 +127,16 @@ addEventListener('scroll', readScroll, { passive: true });
 new ResizeObserver(() => resize()).observe(stage);
 readScroll(); pS = pT;
 // debug hook: window.__celestia.setP(0.9) jumps to a point in the journey
-(window as unknown as { __celestia: unknown }).__celestia = { setP: (v: number) => { pT = pS = v; }, get finale() { return finale; } };
-import('./finale/finale')
-  .then(async m => { await m.finale.start(); finale = m.finale; await fontsReady; m.finale.refreshText(); })
-  .catch(err => console.warn('3D finale unavailable, using 2D version:', err));
+(window as unknown as { __celestia: unknown }).__celestia = { setP: (v: number) => { pT = pS = v; }, get three() { return T; } };
+import('./three/index')
+  .then(async m => {
+    const clouds = new m.Clouds();
+    T = { ...m, clouds };
+    await Promise.all([
+      m.space.start().catch(err => console.warn('3D space unavailable, using 2D version:', err)),
+      m.finale.start(clouds.textures),
+    ]);
+    await fontsReady; m.finale.refreshText();
+  })
+  .catch(err => { console.warn('3D unavailable, using 2D version:', err); T = null; });
 requestAnimationFrame(frame);

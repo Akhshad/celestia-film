@@ -40,3 +40,11 @@ header b { font-weight: 500; color: var(--ink); }
   .line { bottom: 13svh; }
 }
 noscript div { position: fixed; inset: 0; display: grid; place-items: center; text-align: center; font-family: Georgia, serif; font-size: 28px; background: #0f1220; z-index: 10; }
+#credits {
+  position: fixed; right: calc(14px + env(safe-area-inset-right)); bottom: calc(10px + env(safe-area-inset-bottom)); z-index: 6;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
+  font-size: 9px; letter-spacing: .04em; color: rgba(243,236,223,.42); text-shadow: 0 1px 4px rgba(0,0,0,.6);
+}
+#credits a { color: inherit; text-decoration: none; }
+#credits a:hover { color: var(--ink); }
+#mapcredit { opacity: 0; transition: opacity .4s; }

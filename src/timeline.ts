@@ -4,6 +4,7 @@
 import { easeIn2, easeInOut, easeOut3, lerp, sstep } from './util';
 import { view } from './view';
 import { NAG } from './geo/data';
+import { SITE } from './config';
 
 /** Scale constants: KS = solar px per unit at L = 0, KE = earth radius per e^L. */
 export const scale = { KS: 1, KE: 1 };
@@ -26,8 +27,10 @@ export function buildKeys() {
   const Lind = Math.log(Math.min(1.5 * H, 1.8 * W) / KE);
   const Lnag = Math.log(30 * MIN / KE);
   Object.assign(LK, { sun: Lsun, sys: Lsys, earth: Learth, globe: Lglobe, ind: Lind, nag: Lnag });
-  KEYS = [[0, 0], [.03, 0, 2], [.17, Lsun, 0], [.22, Lsys, 3], [.265, Lsys + .16, 1], [.335, Learth, 2], [.41, Lglobe, 3], [.47, Lglobe + .12, 1], [.545, Lind, 1], [.58, Lind + .08, 1], [.645, Lnag, 1], [.69, Lnag + .25, 1], [.80, Lnag + 1.2, 0], [1, Lnag + 1.6, 0]];
-  ROTK = [[Learth - .1, 30, 6], [Lglobe, 80.5, 22], [Lind, 82, 22.6], [Lnag, NAG[0], NAG[1]]];
+  KEYS = [[0, 0], [.03, 0, 2], [.17, Lsun, 0], [.22, Lsys, 3], [.265, Lsys + .16, 1], [.335, Learth, 2], [.41, Lglobe, 3], [.47, Lglobe + .12, 1], [.545, Lind, 1], [.58, Lind + .08, 1], [.645, Lnag, 1],
+    // the dive keeps going (satellite imagery sharpens) until the clouds take over
+    [.70, Lnag + 1.5, 1], [.74, Lnag + 2.9, 0], [.80, Lnag + 3.5, 0], [1, Lnag + 3.9, 0]];
+  ROTK = [[Learth - .1, 30, 6], [Lglobe, 80.5, 22], [Lind, 82, 22.6], [Lnag, NAG[0], NAG[1]], [Lnag + 2.5, SITE[0], SITE[1]]];
 }
 
 export function Lat(p: number) {

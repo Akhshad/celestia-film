@@ -35,9 +35,14 @@ If WebGL2 or the model is unavailable, a flat 2D ending is shown instead.
 
 In `src/config.ts`:
 
+- `SITE`: `[longitude, latitude]` the Earth dive lands on (default: Nagpur city centre)
 - `MODEL_URL`: path to the 3D model
 - `DRAPE_RGB`: drape colour
 - `DRAPE_TOP`, `DRAPE_MAIN`, `DRAPE_BOTTOM`: text printed on the drape
+
+**Satellite dive (Mapbox):** copy `.env.example` to `.env.local` and set `VITE_MAPBOX_TOKEN` to your public Mapbox token (`pk.…`). For the live site, add it as a GitHub Actions secret named `VITE_MAPBOX_TOKEN`. Without a token the dive uses NASA imagery only. Each visit loads ~150 satellite tiles, so watch your Mapbox usage.
+
+Textures: planets/Earth from Solar System Scope (CC BY 4.0) and NASA. The credit line in the corner must stay.
 
 Debug: in the browser console, `__celestia.setP(0.9)` jumps to a point in the journey (0–1).
 

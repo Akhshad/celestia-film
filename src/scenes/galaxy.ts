@@ -28,7 +28,7 @@ export function buildGalaxy() {
 function paintGalaxy(withStars: boolean) {
   const c = mk(GN, GN), g = ctx2d(c), half = GN / 2, k = half / GEXT;
   const P = (x: number, y: number) => [half + x * k, half + y * k];
-  g.fillStyle = '#000'; g.fillRect(0, 0, GN, GN);
+  // transparent background, so it can also sit over the 3D layer
   g.globalCompositeOperation = 'lighter';
   let gr = g.createRadialGradient(half, half, 0, half, half, k * 1.05);
   gr.addColorStop(0, 'rgba(150,140,190,.30)'); gr.addColorStop(.5, 'rgba(70,72,125,.12)'); gr.addColorStop(1, 'rgba(0,0,0,0)');

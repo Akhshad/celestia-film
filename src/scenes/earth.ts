@@ -127,6 +127,50 @@ export function drawEarth(L: number, p: number) {
   return ga;
 }
 
+/** Gold India outline + Nagpur pin drawn over the 3D globe (project() comes from the Three.js camera). */
+export function drawEarthOverlay(L: number, p: number, project: (lon: number, lat: number) => [number, number] | null) {
+  const { MIN, DPR } = view;
+  const z = scale.KE * Math.exp(L) / MIN;
+  const oa = sstep(1.0, 1.8, z) * (1 - sstep(4, 8, z)) * .75;
+  if (oa > 0) {
+    ctx.beginPath(); let started = false;
+    for (let i = 0; i < INDIA.length; i += 2) {
+      const q = project(INDIA[i], INDIA[i + 1]); if (!q) { started = false; continue; }
+      if (started) ctx.lineTo(q[0], q[1]); else { ctx.moveTo(q[0], q[1]); started = true; }
+    }
+    ctx.closePath();
+    ctx.globalAlpha = oa; ctx.strokeStyle = 'rgba(240,210,150,.7)'; ctx.lineWidth = 1.2 * DPR; ctx.lineJoin = 'round';
+    ctx.shadowColor = 'rgba(0,0,0,.6)'; ctx.shadowBlur = 4 * DPR; ctx.stroke(); ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+  const pa = sstep(1.0, 1.6, z) * (1 - sstep(.66, .70, p));
+  if (pa <= 0) return;
+  const q = project(NAG[0], NAG[1]); if (!q) return;
+  const [x, y] = q, time = clock.time;
+  const big = 1 + Math.min(1.6, Math.max(0, Math.log(z / 2)) * .35);
+  ctx.strokeStyle = 'rgba(240,210,150,1)'; ctx.lineWidth = 1.3 * DPR;
+  for (let k = 0; k < 3; k++) {
+    const ph = (time * .45 + k / 3) % 1;
+    ctx.globalAlpha = pa * (1 - ph) * .9; ctx.beginPath(); ctx.arc(x, y, (5 + ph * 30) * DPR * big, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.globalAlpha = pa; ctx.globalCompositeOperation = 'lighter';
+  const gr = 14 * DPR * big; ctx.drawImage(SPR.gold, x - gr, y - gr, gr * 2, gr * 2);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = '#fff4dc'; ctx.beginPath(); ctx.arc(x, y, 2.6 * DPR * big, 0, Math.PI * 2); ctx.fill();
+  const la = pa * (1 - sstep(LK.nag - 1.9, LK.nag - 1.0, L));
+  if (la > 0) {
+    ctx.globalAlpha = la; ctx.fillStyle = '#f3ecdf';
+    ctx.font = `500 ${11 * DPR}px Jost, Helvetica, Arial, sans-serif`;
+    const spacing = 'letterSpacing' in ctx;
+    if (spacing) ctx.letterSpacing = `${3 * DPR}px`;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(0,0,0,.8)'; ctx.shadowBlur = 6 * DPR;
+    ctx.fillText('NAGPUR', x + 14 * DPR * big, y);
+    ctx.shadowBlur = 0; if (spacing) ctx.letterSpacing = '0px';
+  }
+  ctx.globalAlpha = 1;
+}
+
 function drawNagpurRoads(lam: number, phi: number, Rpx: number, a: number) {
   const DPR = view.DPR;
   const ppd = Rpx * D2R;

@@ -5,21 +5,19 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
-import { D2R, clamp, easeInOut, lerp, sstep } from '../util';
+import { D2R, clamp, easeInOut, lerp, sstep, R, seed } from '../util';
+import { renderer, glSize, maxAniso } from '../three/renderer';
 import { view, clock } from '../view';
 import { MODEL_URL, DRAPE_RGB } from '../config';
 import { buildDrapeGeometry, buildDrapeCanvas } from './drape';
 import * as S from './shaders';
 
-// The custom shaders do their own grading + tone mapping, so keep Three.js out of colour management.
-THREE.ColorManagement.enabled = false;
-
-const SUN3 = new THREE.Vector3(0.694, 0.19, 0.694).normalize();   // low evening sun, front-right
-const FOG3 = new THREE.Color(0.80, 0.62, 0.60);
+const SUN3 = new THREE.Vector3(0.8, 0.075, -0.6).normalize();     // setting sun, low behind the building on the right
+const FOG3 = new THREE.Color(0.86, 0.58, 0.46);
 const EXPOSURE = 0.95;
 const SHN = 2048;               // shadow map size
 const VFOV = 45;                // degrees
-const BLOOM_K = 0.65;
+const BLOOM_K = 0.85;
 
 /* camera path: p, elevation, azimuth (0 = straight in front, negative = from the left), distance, target height */
 const CAMK = [
@@ -30,7 +28,7 @@ const CAMK = [
   [.950, 10.5, -30, 128, 19],
   [1.00, 10.0, -26, 124, 19]];
 
-function camAt(p: number, out: THREE.PerspectiveCamera) {
+function camAt(p: number, out: THREE.PerspectiveCamera, time = 0) {
   let k = CAMK.length - 2;
   for (let i = 1; i < CAMK.length; i++) if (p <= CAMK[i][0]) { k = i - 1; break; }
   const a = CAMK[k], b = CAMK[k + 1];
@@ -41,7 +39,10 @@ function camAt(p: number, out: THREE.PerspectiveCamera) {
   const need = 46 / (Math.tan(VFOV * D2R / 2) * asp);           // keep ~92 m (building + drape) inside narrow screens
   d = Math.max(d, lerp(d, need, sstep(70 * D2R, 40 * D2R, el)));
   const ty = lerp(a[4], b[4], t);
-  out.position.set(d * Math.cos(el) * Math.sin(az), ty + d * Math.sin(el), 2 + d * Math.cos(el) * Math.cos(az));
+  // slow cinematic drift once the drape has settled
+  const drift = sstep(.94, 1, p);
+  const az2 = az + Math.sin(time * .11) * .05 * drift, el2 = el + Math.sin(time * .07 + 1) * .012 * drift;
+  out.position.set(d * Math.cos(el2) * Math.sin(az2), ty + d * Math.sin(el2), 2 + d * Math.cos(el2) * Math.cos(az2));
   out.lookAt(0, ty, 2);
 }
 
@@ -57,7 +58,6 @@ class Finale {
   ready = false;
   failed = false;
 
-  private renderer!: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(VFOV, 1, 1, 2500);
   private lightCam = new THREE.OrthographicCamera(-95, 95, 52, -22, 1, 900);
@@ -75,18 +75,14 @@ class Finale {
   private bloomB!: THREE.WebGLRenderTarget;
   private brightQ!: FullScreenQuad; private blurQ!: FullScreenQuad; private compQ!: FullScreenQuad;
   private shFall = -1;
-  private size = new THREE.Vector2();
-  private shown = false;
+  private size = glSize;
+  private lights!: THREE.ShaderMaterial;
+  private traffic!: THREE.ShaderMaterial;
 
-  constructor(private canvas: HTMLCanvasElement) {}
-
-  async start() {
+  /** @param fogTex cloud sprites (from the cloud generator) reused for the low evening fog */
+  async start(fogTex: THREE.Texture[]) {
     try {
-      const renderer = this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: false, alpha: false, powerPreference: 'high-performance' });
-      renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
-      renderer.toneMapping = THREE.NoToneMapping;
-      renderer.autoClear = false;
-      const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+      const aniso = maxAniso;
 
       this.lightCam.position.copy(SUN3).multiplyScalar(400);
       this.lightCam.lookAt(0, 0, 0);
@@ -165,10 +161,13 @@ class Finale {
       });
       this.casters.push({ mesh: this.drape, main: this.drape.material });
 
+      this.addCityLights();
+      this.addFog(fogTex);
+
       // bloom passes
       this.brightQ = new FullScreenQuad(new THREE.ShaderMaterial({ vertexShader: S.POST_VS, fragmentShader: S.BRIGHT_FS, uniforms: { uSrc: { value: null }, uPx: { value: new THREE.Vector2() } }, depthTest: false, depthWrite: false }));
       this.blurQ = new FullScreenQuad(new THREE.ShaderMaterial({ vertexShader: S.POST_VS, fragmentShader: S.BLUR_FS, uniforms: { uSrc: { value: null }, uDir: { value: new THREE.Vector2() } }, depthTest: false, depthWrite: false }));
-      this.compQ = new FullScreenQuad(new THREE.ShaderMaterial({ vertexShader: S.POST_VS, fragmentShader: S.COMPOSITE_FS, uniforms: { uScene: { value: this.sceneRT.texture }, uBloom: { value: this.bloomA.texture }, uK: { value: BLOOM_K } }, depthTest: false, depthWrite: false }));
+      this.compQ = new FullScreenQuad(new THREE.ShaderMaterial({ vertexShader: S.POST_VS, fragmentShader: S.COMPOSITE_FS, uniforms: { uScene: { value: this.sceneRT.texture }, uBloom: { value: this.bloomA.texture }, uK: { value: BLOOM_K }, uTime: { value: 0 }, uAspect: { value: 1 }, uSunUV: { value: new THREE.Vector2(2, 2) }, uSunVis: { value: 0 } }, depthTest: false, depthWrite: false }));
 
       this.resize();
       // compile everything now so the first finale frame doesn't stutter
@@ -187,22 +186,95 @@ class Finale {
     t.image = buildDrapeCanvas(); t.needsUpdate = true;
   }
 
+  /** Warm city lights on the ground around the site, denser along a few long roads. */
+  private addCityLights() {
+    seed(31);
+    const pos: number[] = [], col: number[] = [], sz: number[] = [];
+    const add = (x: number, z: number, warm: number, s: number) => {
+      if (Math.abs(x) < 75 && z > -45 && z < 60) return;               // keep the compound itself dark
+      pos.push(x, 0.6 + R() * 2, z);
+      const w = warm > .5;
+      col.push(1, w ? .62 + R() * .15 : .9, w ? .28 + R() * .15 : .78);
+      sz.push(s);
+    };
+    // scattered homes and streets, denser towards the city side
+    for (let i = 0; i < 5200; i++) {
+      const r = 90 + Math.pow(R(), .7) * 1250, a = R() * Math.PI * 2;
+      add(Math.cos(a) * r, Math.sin(a) * r, R(), 2.2 + R() * 3.5);
+    }
+    // a few long roads lined with lights (and traffic)
+    const roads: number[][] = [];
+    for (let k = 0; k < 16; k++) {
+      const a = R() * Math.PI, o = (R() - .5) * 1100, len = 1400;
+      const dx = Math.cos(a), dz = Math.sin(a), nx = -dz, nz = dx;
+      for (let t = -len / 2; t < len / 2; t += 9 + R() * 4) add(dx * t + nx * o, dz * t + nz * o, .9, 3 + R() * 2);
+      roads.push([dx * 0 + nx * o, nz * o, dx, dz, nx, nz, len]);
+    }
+    this.addTraffic(roads);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    g.setAttribute('aSize', new THREE.Float32BufferAttribute(sz, 1));
+    this.lights = new THREE.ShaderMaterial({
+      vertexShader: S.LIGHTS_VS, fragmentShader: S.LIGHTS_FS, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, vertexColors: true,
+      uniforms: { uTime: { value: 0 }, uScale: { value: 500 } },
+    });
+    const pts = new THREE.Points(g, this.lights);
+    pts.frustumCulled = false; pts.renderOrder = 4;
+    this.scene.add(pts); this.receiversOnly.push(pts);
+  }
+
+  /** Cars on the roads: white headlights one way, red tail lights the other. */
+  private addTraffic(roads: number[][]) {
+    seed(73);
+    const pos: number[] = [], dir: number[] = [], mv: number[] = [], col: number[] = [];
+    for (const [ox, oz, dx, dz, nx, nz, len] of roads) {
+      for (let i = 0; i < 26; i++) {
+        const lane = R() < .5 ? 1 : -1, speed = (9 + R() * 8) * lane;
+        pos.push(ox + nx * lane * 3.5, 1.2, oz + nz * lane * 3.5);
+        dir.push(dx, 0, dz);
+        mv.push(R() * len, speed, len);
+        if (lane > 0) col.push(1, .93, .8); else col.push(1, .18, .1);
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('aDir', new THREE.Float32BufferAttribute(dir, 3));
+    g.setAttribute('aMove', new THREE.Float32BufferAttribute(mv, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    this.traffic = new THREE.ShaderMaterial({
+      vertexShader: S.TRAFFIC_VS, fragmentShader: S.LIGHTS_FS, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, vertexColors: true,
+      uniforms: { uTime: { value: 0 }, uScale: { value: 500 } },
+    });
+    const pts = new THREE.Points(g, this.traffic);
+    pts.frustumCulled = false; pts.renderOrder = 4;
+    this.scene.add(pts); this.receiversOnly.push(pts);
+  }
+
+  /** Low evening fog banks drifting around the site (thickest on the left, like a river valley). */
+  private addFog(tex: THREE.Texture[]) {
+    seed(57);
+    for (let i = 0; i < 46; i++) {
+      const left = R() < .65;
+      const a = left ? Math.PI * (.55 + R() * .8) : R() * Math.PI * 2;
+      const r = 140 + R() * 900;
+      const m = new THREE.SpriteMaterial({ map: tex[i % tex.length], color: new THREE.Color(1.3, 1.05, .95), transparent: true, opacity: .2 + R() * .16, depthWrite: false });
+      const sp = new THREE.Sprite(m);
+      sp.position.set(Math.cos(a) * r, 6 + R() * 18, Math.sin(a) * r);
+      const w = 160 + R() * 260; sp.scale.set(w, w * .32, 1);
+      sp.renderOrder = 5;
+      this.scene.add(sp); this.receiversOnly.push(sp);
+    }
+  }
+
   resize() {
-    if (!this.renderer) return;
-    const r = this.canvas.parentElement!.getBoundingClientRect();
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
-    this.renderer.setSize(Math.max(1, r.width), Math.max(1, r.height), false);
-    this.renderer.getDrawingBufferSize(this.size);
+    if (!this.sceneRT) return;
     const w = this.size.x, h = this.size.y, qw = Math.max(2, w >> 2), qh = Math.max(2, h >> 2);
     this.sceneRT.setSize(w, h); this.bloomA.setSize(qw, qh); this.bloomB.setSize(qw, qh);
   }
 
-  show(on: boolean) {
-    if (on !== this.shown) { this.shown = on; this.canvas.style.opacity = on ? '1' : '0'; }
-  }
-
   private drawShadowMap() {
-    const r = this.renderer;
+    const r = renderer;
     for (const o of this.receiversOnly) o.visible = false;
     for (const c of this.casters) c.mesh.material = c.mesh === this.drape ? this.drapeDepth : this.meshDepth;
     r.setRenderTarget(this.shadowRT);
@@ -213,15 +285,19 @@ class Finale {
   }
 
   draw(p: number) {
-    const r = this.renderer;
+    const r = renderer;
     const fall = clamp((p - .87) / (.95 - .87), 0, 1);
     shared.uTime.value = clock.time; shared.uFall.value = fall;
+    this.lights.uniforms.uTime.value = clock.time;
+    this.lights.uniforms.uScale.value = this.size.y / (2 * Math.tan(VFOV * D2R / 2));
+    this.traffic.uniforms.uTime.value = clock.time;
+    this.traffic.uniforms.uScale.value = this.lights.uniforms.uScale.value;
     this.drape.visible = fall > 0;
     if (fall !== this.shFall || (fall > 0 && fall < 1)) { this.drawShadowMap(); this.shFall = fall; }
 
     const cam = this.camera;
     cam.aspect = this.size.x / this.size.y; cam.updateProjectionMatrix();
-    camAt(p, cam); cam.updateMatrixWorld();
+    camAt(p, cam, clock.time); cam.updateMatrixWorld();
     shared.uCam.value.copy(cam.position);
     const inv = this.sky.material.uniforms.uInv.value as THREE.Matrix4;
     inv.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse).invert();
@@ -236,15 +312,21 @@ class Finale {
     bu.uSrc.value = this.sceneRT.texture; bu.uPx.value.set(1 / w, 1 / h);
     r.setRenderTarget(A); this.brightQ.render(r);
     const blur = this.blurQ.material as THREE.ShaderMaterial;
-    for (const k of [1, 2.2]) {
+    for (const k of [1, 2.2, 4]) {
       blur.uniforms.uSrc.value = A.texture; blur.uniforms.uDir.value.set(k / A.width, 0);
       r.setRenderTarget(B); this.blurQ.render(r);
       blur.uniforms.uSrc.value = B.texture; blur.uniforms.uDir.value.set(0, k / A.height);
       r.setRenderTarget(A); this.blurQ.render(r);
     }
+    // sun position on screen for the glare
+    const cu = (this.compQ.material as THREE.ShaderMaterial).uniforms;
+    const sp = SUN3.clone().multiplyScalar(2000).add(cam.position).project(cam);
+    cu.uSunUV.value.set(sp.x * .5 + .5, sp.y * .5 + .5);
+    cu.uSunVis.value = sp.z < 1 ? 1 - sstep(.9, 1.6, Math.max(Math.abs(sp.x), Math.abs(sp.y))) : 0;
+    cu.uTime.value = clock.time; cu.uAspect.value = w / h;
     r.setRenderTarget(null);
     this.compQ.render(r);
   }
 }
 
-export const finale = new Finale(document.getElementById('gl') as HTMLCanvasElement);
+export const finale = new Finale();

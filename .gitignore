@@ -3,3 +3,5 @@ dist/
 model/out/
 __pycache__/
 .DS_Store
+assets-src/
+.env.local
