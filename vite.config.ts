@@ -8,5 +8,7 @@ export default defineConfig({
     assetsInlineLimit: 0,
     // Three.js lives in its own lazily loaded chunk (~150 kB gzipped).
     chunkSizeWarningLimit: 700,
+    // two pages: the journey (index) and the enquiry form
+    rollupOptions: { input: { main: 'index.html', enquiry: 'enquiry.html' } },
   },
 });

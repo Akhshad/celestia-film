@@ -12,6 +12,10 @@ import { drawEarth, drawEarthOverlay } from './scenes/earth';
 import { buildClouds, drawClouds } from './scenes/clouds';
 import { buildPlaceholderHall, setHall, layoutHall, drawHall } from './scenes/hall2d';
 import { Film } from './film/film';
+import { Explorer } from './halls/explorer';
+import { initStory } from './story';
+import { initIdeas } from './ideas';
+import { initHallSlider } from './halls/slider';
 type ThreeMod = typeof import('./three/index');
 
 // Three.js (3D space, clouds, finale) loads lazily; the 2D journey starts immediately and is the fallback.
@@ -26,9 +30,11 @@ const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let hintO = -1;
 
 /* Scroll map: the space journey plays on 0 – J of the scroll (its own timeline runs 0 – QJ, up to the
-   dive into the clouds over Nagpur); the film cross-fades in at J and plays until FILM_END; "Coming soon" holds. */
-const J = 0.52, QJ = 0.655, FILM_END = 0.95;
+   Nagpur pin); the film cross-fades in at J and plays until FILM_END, then dissolves into the straight-on
+   front view, which becomes the full-screen hall explorer from EX_IN to the end. */
+const J = 0.46, QJ = 0.655, FILM_END = 0.80, EX_IN = 0.845;
 const film = new Film(document.getElementById('film') as HTMLCanvasElement);
+const explorer = new Explorer(document.getElementById('stage') as HTMLElement);
 
 let VIG: CanvasGradient | null = null;
 function drawVignette() {
@@ -43,10 +49,11 @@ function drawVignette() {
 function render(p: number) {
   // the film takes over from the Nagpur dive; once it fully covers the screen the journey below stops drawing
   const filmO = film.ready ? sstep(J - .035, J + .005, p) : 0;
-  // darken a little under the closing titles so they read over the lit facade
-  const dim = .28 * sstep(.83, .86, p) * (1 - sstep(.91, .935, p)) + .5 * sstep(.935, .97, p);
+  // darken a little under the "Celestia" title so it reads over the lit facade
+  const dim = .28 * sstep(.705, .729, p) * (1 - sstep(.768, .788, p));
   film.draw(clamp((p - J) / (FILM_END - J), 0, 1), filmO, dim);
   if (p > .2) film.start();
+  explorer.update(sstep(FILM_END, EX_IN, p), sstep(FILM_END, EX_IN + .03, p));
   updateLines(p);
   if (filmO >= 1) { T?.showGL(false); return; }
   renderJourney(Math.min(QJ, p / J * QJ));
@@ -114,12 +121,15 @@ function resize() {
   buildKeys(); layoutHall();
   if (T) { T.resizeRenderer(); T.finale.resize(); }
   film.resize();
+  explorer.layout();
 }
 
 /* scroll progress, eased towards the target so the journey glides */
 let pT = 0, pS = 0, last = performance.now();
+const track = document.getElementById('track') as HTMLElement;
 function readScroll() {
-  const max = document.documentElement.scrollHeight - innerHeight;
+  // progress runs over the journey + film only, not the sections below it
+  const max = track.offsetHeight - innerHeight;
   pT = max > 0 ? clamp(scrollY / max, 0, 1) : 0;
 }
 function frame(now: number) {
@@ -143,6 +153,9 @@ if (HALL_IMAGE) {
 addEventListener('scroll', readScroll, { passive: true });
 new ResizeObserver(() => resize()).observe(stage);
 readScroll(); pS = pT;
+initIdeas(document.getElementById('ideas'));
+initStory();
+initHallSlider(document.getElementById('halls'));
 // debug hook: window.__celestia.setP(0.9) jumps to a point in the journey
 (window as unknown as { __celestia: unknown }).__celestia = { setP: (v: number) => { pT = pS = v; }, get three() { return T; } };
 import('./three/index')

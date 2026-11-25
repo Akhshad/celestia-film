@@ -113,7 +113,7 @@ export function drawEarth(L: number, p: number) {
       const la = pa * (1 - sstep(LK.nag - 1.9, LK.nag - 1.0, L));
       if (la > 0) {
         ctx.globalAlpha = la; ctx.fillStyle = '#f3ecdf';
-        ctx.font = `500 ${11 * DPR}px Jost, Helvetica, Arial, sans-serif`;
+        ctx.font = `500 ${11 * DPR}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
         const spacing = 'letterSpacing' in ctx;
         if (spacing) ctx.letterSpacing = `${3 * DPR}px`;
         ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
@@ -160,7 +160,7 @@ export function drawEarthOverlay(L: number, p: number, project: (lon: number, la
   const la = pa * (1 - sstep(LK.nag - 1.9, LK.nag - 1.0, L));
   if (la > 0) {
     ctx.globalAlpha = la; ctx.fillStyle = '#f3ecdf';
-    ctx.font = `500 ${11 * DPR}px Jost, Helvetica, Arial, sans-serif`;
+    ctx.font = `500 ${11 * DPR}px "Helvetica Neue", Helvetica, Arial, sans-serif`;
     const spacing = 'letterSpacing' in ctx;
     if (spacing) ctx.letterSpacing = `${3 * DPR}px`;
     ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
