@@ -1,17 +1,16 @@
 /* =====================================================================
-   2D FALLBACK ENDING: top view of the hall + flat drape.
+   2D FALLBACK ENDING: top view of the hall.
    Used only if WebGL or the 3D model is unavailable.
    ===================================================================== */
-import { R, seed, mk, ctx2d, roundRect, spaced, clamp, easeOut3, lerp, sstep } from '../util';
+import { R, seed, mk, ctx2d, roundRect, clamp, easeOut3, lerp } from '../util';
 import { view, ctx } from '../view';
-import { DRAPE_TOP, DRAPE_MAIN, DRAPE_BOTTOM } from '../config';
 
 type Box = { cx: number; cy: number; w: number; h: number };
 type Img = HTMLCanvasElement | HTMLImageElement;
 
 let HALL: { img: Img; b: Box; iw: number; ih: number } | null = null;
 let HALLBG: HTMLCanvasElement;
-let HL = { s: 1, half: [100, 80] };
+let HL = { s: 1 };
 
 /** Drawn placeholder (until a real top-view photo is provided). */
 export function buildPlaceholderHall(): { img: HTMLCanvasElement; b: Box } {
@@ -90,7 +89,7 @@ export function layoutHall() {
   if (!HALL || !W) return;
   const bw = HALL.b.w * HALL.iw, bh = HALL.b.h * HALL.ih;
   const s = PORTRAIT ? Math.min(.68 * W / bw, .46 * H / bh) : Math.min(.46 * W / bw, .52 * H / bh);
-  HL = { s, half: [bw * s / 2 * 1.04, bh * s / 2 * 1.04] };
+  HL = { s };
 }
 
 export function drawHall(p: number) {
@@ -109,52 +108,4 @@ export function drawHall(p: number) {
   ctx.drawImage(HALL.img, x, y, dw, dh);
   const haze = (1 - t) * .2;
   if (haze > 0) { ctx.globalAlpha = haze; ctx.fillStyle = '#e8eef7'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
-}
-
-/* ---- flat drape ---- */
-let texAspect = 0, TEXTCV: HTMLCanvasElement | null = null, TINT: HTMLCanvasElement | null = null;
-
-export function buildTextTexture(force: boolean) {
-  const asp = HL.half[1] / HL.half[0];
-  if (!force && Math.abs(asp - texAspect) < .02) return;
-  texAspect = asp;
-  const tw = 2048, th = Math.max(256, Math.round(2048 * asp));
-  const c = TEXTCV && TEXTCV.width === tw && TEXTCV.height === th ? TEXTCV : mk(tw, th);
-  const g = ctx2d(c); g.clearRect(0, 0, tw, th);
-  g.fillStyle = '#fff'; g.strokeStyle = '#fff';
-  const m = Math.min(tw, th), m1 = m * .07, m2 = m1 + m * .02;
-  g.lineWidth = m * .007; g.strokeRect(m1, m1, tw - 2 * m1, th - 2 * m1);
-  g.lineWidth = m * .0032; g.strokeRect(m2, m2, tw - 2 * m2, th - 2 * m2);
-  g.textAlign = 'center'; g.textBaseline = 'middle';
-  const sm = Math.min(th * .058, tw * .034);
-  g.font = `500 ${sm}px Jost, Helvetica, Arial, sans-serif`;
-  spaced(g, DRAPE_TOP, tw / 2, th * .27, sm * .55);
-  g.font = `italic 500 ${Math.min(th * .25, tw * .135)}px "Cormorant Garamond", Georgia, "Times New Roman", serif`;
-  g.fillText(DRAPE_MAIN, tw / 2, th * .52);
-  g.font = `500 ${sm * .9}px Jost, Helvetica, Arial, sans-serif`;
-  spaced(g, DRAPE_BOTTOM, tw / 2, th * .8, sm * .7);
-  TEXTCV = c; TINT = null;
-}
-
-function tintedText() {
-  if (TINT) return TINT;
-  TINT = mk(TEXTCV!.width, TEXTCV!.height);
-  const g = ctx2d(TINT); g.drawImage(TEXTCV!, 0, 0);
-  g.globalCompositeOperation = 'source-in'; g.fillStyle = '#e2bf7e'; g.fillRect(0, 0, TINT.width, TINT.height);
-  return TINT;
-}
-
-export function drawDrape2D(p: number) {
-  if (p < .867) return;
-  const { CX, CY } = view;
-  const f = clamp((p - .87) / (.95 - .87), 0, 1), fe = easeOut3(f);
-  const sc = lerp(2.2, 1, fe), op = sstep(0, .14, f), textA = sstep(.925, .975, p);
-  const hx = HL.half[0] * sc, hy = HL.half[1] * sc, pad = 60 * Math.min(hx, hy) / 250;
-  ctx.globalAlpha = op;
-  ctx.fillStyle = 'rgba(0,0,0,.35)'; roundRect(ctx, CX - hx - pad + 14, CY - hy - pad + 18, 2 * (hx + pad), 2 * (hy + pad), pad); ctx.fill();
-  const g = ctx.createLinearGradient(CX - hx, CY - hy, CX + hx, CY + hy);
-  g.addColorStop(0, '#8a1d2e'); g.addColorStop(.5, '#5a0f1f'); g.addColorStop(1, '#300610');
-  ctx.fillStyle = g; roundRect(ctx, CX - hx - pad, CY - hy - pad, 2 * (hx + pad), 2 * (hy + pad), pad); ctx.fill();
-  if (TEXTCV && textA > 0) { ctx.globalAlpha = op * textA; ctx.drawImage(tintedText(), CX - hx, CY - hy, 2 * hx, 2 * hy); }
-  ctx.globalAlpha = 1;
 }

@@ -85,6 +85,7 @@ void main(){
         c += vec3(1.0, 0.62, 0.22) * leaf * 1.6 * pow(max(dot(-V, uSun), 0.0), 6.0) * (1.0 - clump * 0.6);
         c += vec3(1.0, 0.55, 0.25) * pow(1.0 - max(dot(N, V), 0.0), 3.0) * 0.05 * sh;
       }
+      c += b * vec3(0.17, 0.10, 0.04) * (1.0 - abs(N.y)) * step(uMode, 0.5);  // warm architectural floodlighting on the walls
       c *= mix(0.55, 1.0, smoothstep(0.0, 7.0, vW.y));                // contact shadow near the ground
       float lum = dot(b, vec3(0.3, 0.59, 0.11));
       float glass = smoothstep(0.03, 0.10, b.b - b.r) * (1.0 - smoothstep(0.3, 0.55, lum));
@@ -124,54 +125,7 @@ void main(){
   vec3 cc = mix(vec3(0.46, 0.34, 0.48), vec3(1.55, 0.80, 0.42), toward * toward);
   c = mix(c, cc, band * 0.8);
   c += (hash(gl_FragCoord.xy) - 0.5) / 120.0;
-  gl_FragColor = vec4(aces(c * uExp), 1.0);
-}`;
-
-/* ---------- satin drape: falls from aI (start) to position (final) ---------- */
-export const DRAPE_VS = /* glsl */ `
-attribute vec3 aI; attribute vec3 aQ;
-uniform float uFall, uTime;
-varying vec3 vW; varying vec3 vN; varying vec2 vT; varying vec3 vQ;
-void main(){
-  float v = max(aQ.x, 0.0);
-  float tl = clamp((uFall - 0.3 * v) / 0.7, 0.0, 1.0);
-  float e = 1.0 - pow(1.0 - tl, 3.0);
-  vec3 p = mix(aI, position, e);
-  float fl = 1.0 - e;
-  p.y += fl * 3.2 * sin(aQ.y * 0.35 + uTime * 2.3 + v * 4.0);
-  p.y += fl * fl * 2.5 * sin(position.x * 0.12 + uTime * 1.7) * sin(position.z * 0.15 - uTime * 1.3);
-  p.xz += normal.xz * (0.07 * v * sin(uTime * 1.2 + aQ.y * 0.4)) * e;
-  vN = normalize(mix(vec3(0.0, 1.0, 0.0), normal, e));
-  vW = p; vT = uv; vQ = aQ;
-  gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
-}`;
-
-export const DRAPE_FS = /* glsl */ `
-uniform sampler2D uTex; uniform vec3 uCam, uBase; uniform vec2 uTexel; uniform float uExp;
-varying vec3 vW; varying vec3 vN; varying vec2 vT; varying vec3 vQ;
-${SKYFN}
-void main(){
-  vec3 N = normalize(vN);
-  vec3 V = normalize(uCam - vW);
-  if (dot(N, V) < 0.0) N = -N;
-  vec3 H = normalize(uSun + V);
-  vec3 SUNC = vec3(1.0, 0.68, 0.40) * 1.75;
-  float d = max(dot(N, uSun), 0.0), nh = max(dot(N, H), 0.0);
-  float fr = pow(1.0 - max(dot(N, V), 0.0), 3.0);
-  vec3 amb = mix(vec3(0.24, 0.19, 0.18), vec3(0.32, 0.36, 0.56), 0.5 + 0.5 * N.y);
-  vec3 c = uBase * (amb * 1.1 + SUNC * d * 0.9) + vec3(1.0, 0.66, 0.50) * (pow(nh, 90.0) * 0.75 + pow(nh, 18.0) * 0.07) * (0.4 + 0.6 * d) + skyCol(reflect(-V, N)) * fr * 0.18;
-  float hem = smoothstep(0.952, 0.962, vQ.x);
-  float ta = texture2D(uTex, vT).a;
-  float tx = texture2D(uTex, vT + vec2(uTexel.x, 0.0)).a - texture2D(uTex, vT - vec2(uTexel.x, 0.0)).a;
-  float ty = texture2D(uTex, vT + vec2(0.0, uTexel.y)).a - texture2D(uTex, vT - vec2(0.0, uTexel.y)).a;
-  vec3 Ng = normalize(N + vec3(-tx, ty, 0.0) * 0.9);
-  float dg = max(dot(Ng, uSun), 0.0), ng = max(dot(Ng, H), 0.0);
-  vec3 gold = vec3(0.86, 0.64, 0.30) * (amb * 1.4 + SUNC * dg * 0.8) + vec3(1.4, 1.1, 0.7) * pow(ng, 26.0);
-  c = mix(c, gold, max(hem, ta));
-  vec3 dv = vW - uCam;
-  float f = smoothstep(380.0, 1500.0, length(dv)) * 0.45;
-  c = mix(c, skyCol(normalize(vec3(dv.x, 0.03, dv.z))), f);
-  gl_FragColor = vec4(aces(c * uExp), 1.0);
+  gl_FragColor = vec4(aces(c * uExp), 0.0);   // alpha 0 marks sky (source of the sun rays)
 }`;
 
 /* ---------- shadow map (depth packed into RGBA8) ---------- */
@@ -227,6 +181,21 @@ void main(){
     st += (texture2D(uBloom, vU + vec2(o, 0.0)).rgb + texture2D(uBloom, vU - vec2(o, 0.0)).rgb) / float(i);
   }
   c += b * uK + st * vec3(0.55, 0.62, 1.0) * 0.16;
+  // god rays: march towards the sun through the bright sky only (alpha 0 = sky), so light streams
+  // past the building's silhouette and the building itself never smears
+  if (uSunVis > 0.0) {
+    vec2 step = (uSunUV - vU) / 28.0;
+    vec2 tc = vU + step * hash(vU * 517.3 + uTime);
+    float w = 1.0; vec3 gr = vec3(0.0);
+    for (int i = 0; i < 28; i++) {
+      tc += step;
+      vec4 sp = texture2D(uScene, clamp(tc, 0.0, 1.0));
+      float l = dot(sp.rgb, vec3(0.299, 0.587, 0.114));
+      gr += sp.rgb * (1.0 - sp.a) * smoothstep(0.62, 1.0, l) * w;
+      w *= 0.95;
+    }
+    c += gr / 28.0 * vec3(1.0, 0.74, 0.46) * 0.85 * uSunVis;
+  }
   // sun glare and soft veil
   vec2 sd = (vU - uSunUV) * vec2(uAspect, 1.0);
   float sl = length(sd);
@@ -235,7 +204,7 @@ void main(){
   c = min(c, 1.4);
   // grade: punchy contrast, richer colour, teal shadows / amber highlights
   float lum = dot(c, vec3(0.299, 0.587, 0.114));
-  c = mix(vec3(lum), c, 1.22);
+  c = mix(vec3(lum), c, 1.26);
   c = mix(c, c * c * (3.0 - 2.0 * c), 0.45);
   lum = dot(c, vec3(0.299, 0.587, 0.114));
   c += (1.0 - lum) * (1.0 - lum) * vec3(-0.035, 0.012, 0.045);

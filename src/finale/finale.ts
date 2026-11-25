@@ -1,6 +1,6 @@
 /* =====================================================================
    3D FINALE (Three.js): the real building (celestia-hall.glb) at golden
-   hour, a satin drape falling over it, soft shadows and bloom.
+   hour, with soft shadows and bloom.
    ===================================================================== */
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -8,25 +8,25 @@ import { FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 import { D2R, clamp, easeInOut, lerp, sstep, R, seed } from '../util';
 import { renderer, glSize, maxAniso } from '../three/renderer';
 import { view, clock } from '../view';
-import { MODEL_URL, DRAPE_RGB } from '../config';
-import { buildDrapeGeometry, buildDrapeCanvas } from './drape';
+import { MODEL_URL } from '../config';
 import * as S from './shaders';
 
-const SUN3 = new THREE.Vector3(0.8, 0.075, -0.6).normalize();     // setting sun, low behind the building on the right
+const SUN3 = new THREE.Vector3(-0.8, 0.075, -0.6).normalize();    // setting sun, low behind the building on the left
 const FOG3 = new THREE.Color(0.86, 0.58, 0.46);
 const EXPOSURE = 0.95;
 const SHN = 2048;               // shadow map size
 const VFOV = 45;                // degrees
 const BLOOM_K = 0.85;
 
-/* camera path: p, elevation, azimuth (0 = straight in front, negative = from the left), distance, target height */
+/* camera path: p, elevation, azimuth (0 = straight in front, positive = from the right, where the side road is), distance, target height */
 const CAMK = [
-  [.700, 89.0, -18, 330, 6],
-  [.748, 88.5, -18, 235, 6],
-  [.805, 50.0, -30, 172, 10],
-  [.866, 12.5, -36, 132, 17],
-  [.950, 10.5, -30, 128, 19],
-  [1.00, 10.0, -26, 124, 19]];
+  [.700, 89.0, 18, 330, 6],
+  [.748, 88.5, 18, 235, 6],
+  [.805, 50.0, 30, 172, 10],
+  [.866, 12.5, 36, 132, 17],
+  [.910, 24.0, 16, 110, 13],
+  [.950, 30.0, 6, 112, 15],
+  [1.00, 27.0, 10, 104, 15]];
 
 function camAt(p: number, out: THREE.PerspectiveCamera, time = 0) {
   let k = CAMK.length - 2;
@@ -36,10 +36,10 @@ function camAt(p: number, out: THREE.PerspectiveCamera, time = 0) {
   const el = lerp(a[1], b[1], t) * D2R, az = lerp(a[2], b[2], t) * D2R;
   let d = lerp(a[3], b[3], t);
   const asp = view.W / view.H;
-  const need = 46 / (Math.tan(VFOV * D2R / 2) * asp);           // keep ~92 m (building + drape) inside narrow screens
+  const need = 46 / (Math.tan(VFOV * D2R / 2) * asp);           // keep ~92 m (the building and its forecourt) inside narrow screens
   d = Math.max(d, lerp(d, need, sstep(70 * D2R, 40 * D2R, el)));
   const ty = lerp(a[4], b[4], t);
-  // slow cinematic drift once the drape has settled
+  // slow cinematic drift at the end of the journey
   const drift = sstep(.94, 1, p);
   const az2 = az + Math.sin(time * .11) * .05 * drift, el2 = el + Math.sin(time * .07 + 1) * .012 * drift;
   out.position.set(d * Math.cos(el2) * Math.sin(az2), ty + d * Math.sin(el2), 2 + d * Math.cos(el2) * Math.cos(az2));
@@ -50,8 +50,6 @@ const shared = {
   uSun: { value: SUN3 },
   uExp: { value: EXPOSURE },
   uCam: { value: new THREE.Vector3() },
-  uTime: { value: 0 },
-  uFall: { value: 0 },
 };
 
 class Finale {
@@ -62,8 +60,6 @@ class Finale {
   private camera = new THREE.PerspectiveCamera(VFOV, 1, 1, 2500);
   private lightCam = new THREE.OrthographicCamera(-95, 95, 52, -22, 1, 900);
   private sky!: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
-  private drape!: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
-  private drapeDepth!: THREE.ShaderMaterial;
   private meshDepth!: THREE.ShaderMaterial;
   /** Meshes that cast shadows, with their main material. */
   private casters: { mesh: THREE.Mesh; main: THREE.Material }[] = [];
@@ -74,7 +70,7 @@ class Finale {
   private bloomA!: THREE.WebGLRenderTarget;
   private bloomB!: THREE.WebGLRenderTarget;
   private brightQ!: FullScreenQuad; private blurQ!: FullScreenQuad; private compQ!: FullScreenQuad;
-  private shFall = -1;
+  private shadowDone = false;
   private size = glSize;
   private lights!: THREE.ShaderMaterial;
   private traffic!: THREE.ShaderMaterial;
@@ -139,28 +135,6 @@ class Finale {
         else this.casters.push({ mesh, main: mat });
       }
 
-      // the drape
-      const tex = new THREE.CanvasTexture(buildDrapeCanvas());
-      tex.flipY = false; tex.colorSpace = THREE.NoColorSpace; tex.anisotropy = aniso;
-      tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
-      tex.minFilter = THREE.LinearMipmapLinearFilter;
-      const dg = buildDrapeGeometry();
-      this.drape = new THREE.Mesh(dg, new THREE.ShaderMaterial({
-        vertexShader: S.DRAPE_VS, fragmentShader: S.DRAPE_FS, side: THREE.DoubleSide,
-        uniforms: {
-          uSun: shared.uSun, uExp: shared.uExp, uCam: shared.uCam, uTime: shared.uTime, uFall: shared.uFall,
-          uBase: { value: new THREE.Vector3(...DRAPE_RGB) }, uTex: { value: tex },
-          uTexel: { value: new THREE.Vector2(1.5 / 2048, 1.5 / 2048) },
-        },
-      }));
-      this.drape.frustumCulled = false; this.drape.renderOrder = 3; this.drape.visible = false;
-      this.scene.add(this.drape);
-      this.drapeDepth = new THREE.ShaderMaterial({
-        vertexShader: S.DRAPE_VS, fragmentShader: S.DEPTH_FS, side: THREE.DoubleSide,
-        uniforms: { uTime: shared.uTime, uFall: shared.uFall },
-      });
-      this.casters.push({ mesh: this.drape, main: this.drape.material });
-
       this.addCityLights();
       this.addFog(fogTex);
 
@@ -177,13 +151,6 @@ class Finale {
       console.warn('3D finale unavailable, using 2D version:', err);
       this.failed = true;
     }
-  }
-
-  /** Redraw the drape lettering (after web fonts finish loading). */
-  refreshText() {
-    if (!this.ready) return;
-    const t = this.drape.material.uniforms.uTex.value as THREE.CanvasTexture;
-    t.image = buildDrapeCanvas(); t.needsUpdate = true;
   }
 
   /** Warm city lights on the ground around the site, denser along a few long roads. */
@@ -276,7 +243,7 @@ class Finale {
   private drawShadowMap() {
     const r = renderer;
     for (const o of this.receiversOnly) o.visible = false;
-    for (const c of this.casters) c.mesh.material = c.mesh === this.drape ? this.drapeDepth : this.meshDepth;
+    for (const c of this.casters) c.mesh.material = this.meshDepth;
     r.setRenderTarget(this.shadowRT);
     r.setClearColor(0xffffff, 1); r.clear();
     r.render(this.scene, this.lightCam);
@@ -286,14 +253,11 @@ class Finale {
 
   draw(p: number) {
     const r = renderer;
-    const fall = clamp((p - .87) / (.95 - .87), 0, 1);
-    shared.uTime.value = clock.time; shared.uFall.value = fall;
     this.lights.uniforms.uTime.value = clock.time;
     this.lights.uniforms.uScale.value = this.size.y / (2 * Math.tan(VFOV * D2R / 2));
     this.traffic.uniforms.uTime.value = clock.time;
     this.traffic.uniforms.uScale.value = this.lights.uniforms.uScale.value;
-    this.drape.visible = fall > 0;
-    if (fall !== this.shFall || (fall > 0 && fall < 1)) { this.drawShadowMap(); this.shFall = fall; }
+    if (!this.shadowDone) { this.drawShadowMap(); this.shadowDone = true; }
 
     const cam = this.camera;
     cam.aspect = this.size.x / this.size.y; cam.updateProjectionMatrix();
@@ -303,7 +267,7 @@ class Finale {
     inv.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse).invert();
 
     r.setRenderTarget(this.sceneRT);
-    r.setClearColor(FOG3, 1); r.clear();
+    r.setClearColor(FOG3, 0); r.clear();
     r.render(this.scene, cam);
 
     // bloom: bright pass at quarter res, two separable blur iterations, then composite to screen

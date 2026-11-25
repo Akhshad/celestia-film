@@ -1,5 +1,5 @@
 /* Celestia Banquets: scroll journey
-   Milky Way → solar system → Earth → India → Nagpur → clouds → the building → drape "Coming Soon". */
+   Milky Way → solar system → Earth → India → Nagpur → (film) clouds → the plot → construction → Celestia lit at dusk. */
 import './style.css';
 import { clamp, sstep } from './util';
 import { view, clock, ctx, canvas2d } from './view';
@@ -10,7 +10,8 @@ import { buildGalaxy, buildBG, drawBG, drawGalaxy } from './scenes/galaxy';
 import { drawSolar } from './scenes/solar';
 import { drawEarth, drawEarthOverlay } from './scenes/earth';
 import { buildClouds, drawClouds } from './scenes/clouds';
-import { buildPlaceholderHall, setHall, layoutHall, drawHall, buildTextTexture, drawDrape2D } from './scenes/hall2d';
+import { buildPlaceholderHall, setHall, layoutHall, drawHall } from './scenes/hall2d';
+import { Film } from './film/film';
 type ThreeMod = typeof import('./three/index');
 
 // Three.js (3D space, clouds, finale) loads lazily; the 2D journey starts immediately and is the fallback.
@@ -24,6 +25,11 @@ const lines = [...document.querySelectorAll<HTMLElement>('.line')].map(el => ({ 
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let hintO = -1;
 
+/* Scroll map: the space journey plays on 0 – J of the scroll (its own timeline runs 0 – QJ, up to the
+   dive into the clouds over Nagpur); the film cross-fades in at J and plays until FILM_END; "Coming soon" holds. */
+const J = 0.52, QJ = 0.655, FILM_END = 0.95;
+const film = new Film(document.getElementById('film') as HTMLCanvasElement);
+
 let VIG: CanvasGradient | null = null;
 function drawVignette() {
   const { W, H, CX, CY, MIN } = view;
@@ -35,6 +41,18 @@ function drawVignette() {
 }
 
 function render(p: number) {
+  // the film takes over from the Nagpur dive; once it fully covers the screen the journey below stops drawing
+  const filmO = film.ready ? sstep(J - .035, J + .005, p) : 0;
+  // darken a little under the closing titles so they read over the lit facade
+  const dim = .28 * sstep(.83, .86, p) * (1 - sstep(.91, .935, p)) + .5 * sstep(.935, .97, p);
+  film.draw(clamp((p - J) / (FILM_END - J), 0, 1), filmO, dim);
+  if (p > .2) film.start();
+  updateLines(p);
+  if (filmO >= 1) { T?.showGL(false); return; }
+  renderJourney(Math.min(QJ, p / J * QJ));
+}
+
+function renderJourney(p: number) {
   const { W, H } = view;
   const L = Lat(p);
   const use3D = !!T?.finale.ready, live3D = use3D && p > .735;
@@ -68,7 +86,10 @@ function render(p: number) {
   const wo = sstep(.71, .736, p) * (1 - sstep(.74, .772, p)) * .96;
   if (wo > 0) { ctx.globalAlpha = wo; ctx.fillStyle = use3D ? '#f4e2d4' : '#eef2f8'; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
   ctx.globalAlpha = live3D ? .55 : 1; drawVignette(); ctx.globalAlpha = 1;
-  if (!use3D) drawDrape2D(p);
+}
+
+/* captions + scroll hint run on the page's scroll progress */
+function updateLines(p: number) {
   for (const l of lines) {
     const t = (p - l.a) / (l.b - l.a);
     const o = t <= 0 || t >= 1 ? 0 : sstep(0, .2, t) * (1 - sstep(.8, 1, t));
@@ -90,8 +111,9 @@ function resize() {
   canvas2d.width = W; canvas2d.height = H;
   Object.assign(view, { DPR, W, H, MIN: Math.min(W, H), MAX: Math.max(W, H), CX: W / 2, CY: H / 2, PORTRAIT: H > W * 1.05 });
   VIG = null;
-  buildKeys(); layoutHall(); buildTextTexture(false);
+  buildKeys(); layoutHall();
   if (T) { T.resizeRenderer(); T.finale.resize(); }
+  film.resize();
 }
 
 /* scroll progress, eased towards the target so the journey glides */
@@ -113,16 +135,11 @@ buildLayers(); buildGalaxy(); buildBG(); buildClouds();
 const ph = buildPlaceholderHall();
 setHall(ph.img, ph.b);
 resize();
-buildTextTexture(true);
 if (HALL_IMAGE) {
   const im = new Image();
-  im.onload = () => { setHall(im, HALL_BUILDING); buildTextTexture(true); };
+  im.onload = () => setHall(im, HALL_BUILDING);
   im.src = HALL_IMAGE;
 }
-const fontsReady = document.fonts?.load
-  ? Promise.all([document.fonts.load('italic 500 80px "Cormorant Garamond"'), document.fonts.load('500 40px Jost')]).catch(() => {})
-  : Promise.resolve();
-fontsReady.then(() => buildTextTexture(true));
 addEventListener('scroll', readScroll, { passive: true });
 new ResizeObserver(() => resize()).observe(stage);
 readScroll(); pS = pT;
@@ -132,11 +149,9 @@ import('./three/index')
   .then(async m => {
     const clouds = new m.Clouds();
     T = { ...m, clouds };
-    await Promise.all([
-      m.space.start().catch(err => console.warn('3D space unavailable, using 2D version:', err)),
-      m.finale.start(clouds.textures),
-    ]);
-    await fontsReady; m.finale.refreshText();
+    // the old 3D building finale is replaced by the film, so only the space scene starts
+    await m.space.start().catch(err => console.warn('3D space unavailable, using 2D version:', err));
+    film.start();
   })
   .catch(err => { console.warn('3D unavailable, using 2D version:', err); T = null; });
 requestAnimationFrame(frame);

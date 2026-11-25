@@ -2,7 +2,7 @@
 * { box-sizing: border-box; }
 html, body { margin: 0; background: #04050b; color: var(--ink); }
 body { font-family: 'Jost', 'Helvetica Neue', Arial, sans-serif; -webkit-font-smoothing: antialiased; }
-#track { position: relative; height: 1200vh; }
+#track { position: relative; height: 1700vh; }
 #stage { position: sticky; top: 0; width: 100%; height: 100vh; height: 100svh; overflow: hidden; }
 #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 #gl { pointer-events: none; opacity: 0; }
@@ -48,3 +48,6 @@ noscript div { position: fixed; inset: 0; display: grid; place-items: center; te
 #credits a { color: inherit; text-decoration: none; }
 #credits a:hover { color: var(--ink); }
 #mapcredit { opacity: 0; transition: opacity .4s; }
+#film { z-index: 2; opacity: 0; visibility: hidden; pointer-events: none; }
+.line.finale { font-style: normal; font-weight: 500; letter-spacing: .08em; font-size: clamp(46px, 7.4vw, 104px); bottom: 42vh; bottom: 42svh; }
+.line.finale small { letter-spacing: .32em; margin-top: 18px; }

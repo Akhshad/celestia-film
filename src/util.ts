@@ -31,13 +31,3 @@ export function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: 
   g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
   g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
 }
-
-/** fillText with manual letter spacing, centred on cx. */
-export function spaced(g: CanvasRenderingContext2D, text: string, cx: number, y: number, sp: number) {
-  const chars = [...text];
-  const ws = chars.map(ch => g.measureText(ch).width);
-  const total = ws.reduce((a, b) => a + b, 0) + sp * (chars.length - 1);
-  let x = cx - total / 2; const al = g.textAlign; g.textAlign = 'left';
-  chars.forEach((ch, i) => { g.fillText(ch, x, y); x += ws[i] + sp; });
-  g.textAlign = al;
-}
