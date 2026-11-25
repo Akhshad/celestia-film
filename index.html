@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Celestia Banquets · Nagpur</title>
+<meta name="description" content="Celestia Banquets, Nagpur. Something celestial is taking shape.">
+<meta name="theme-color" content="#04050b">
+<link rel="preload" href="./fonts/Cambon-Regular.ttf" as="font" type="font/ttf" crossorigin>
+<!-- handwritten accent font (La Belle Aurore, Google Fonts, OFL) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=La+Belle+Aurore&display=swap">
+  <script type="module" crossorigin src="./assets/main-DOp90urk.js"></script>
+  <link rel="modulepreload" crossorigin href="./assets/style-BxGHl81O.js">
+  <link rel="stylesheet" crossorigin href="./assets/style-Bg_5j3OE.css">
+</head>
+<body>
+<header><span><b>Celestia</b> Banquets</span><span>Nagpur</span></header>
+
+<div id="track">
+  <div id="stage">
+    <canvas id="gl"></canvas>
+    <canvas id="c"></canvas>
+    <canvas id="film" aria-label="Film: clouds over Nagpur, the plot, Celestia rising and lit at dusk"></canvas>
+
+    <div id="hint">Scroll to explore<i></i></div>
+    <!-- Scroll captions: data-a / data-b = scroll progress (0–1) where each line fades in and out.
+         0 – .46 is the space journey (galaxy → Earth → Nagpur); .46 – .80 the film; then the front view and Explore the halls. -->
+    <div class="line" data-a=".030" data-b=".090">Among a hundred billion stars</div>
+    <div class="line" data-a=".123" data-b=".183">around one golden sun</div>
+    <div class="line" data-a=".240" data-b=".310">on one blue planet</div>
+    <div class="line" data-a=".330" data-b=".387">at the very heart of India</div>
+    <div class="line city" data-a=".400" data-b=".46">Nagpur<small>21.1458° N &nbsp;·&nbsp; 79.0882° E</small></div>
+    <div class="line" data-a=".496" data-b=".567">something celestial is taking shape</div>
+    <div class="line" data-a=".594" data-b=".673">rising, floor by floor<small>Celestia · Nagpur</small></div>
+    <div class="line city" data-a=".709" data-b=".778">Celestia<small>Luxe &nbsp;·&nbsp; Banquets &nbsp;·&nbsp; Roof</small></div>
+  </div>
+</div>
+
+<main id="after">
+  <!-- Intro statement: text on the left, two overlapping photos drifting on the right -->
+  <section class="intro" data-tone="light" aria-labelledby="intro-text">
+    <div class="intro-copy">
+      <p class="intro-accent" data-reveal>Celebrations, beautifully hosted</p>
+      <p class="intro-text" id="intro-text" data-reveal>We host celebrations that feel entirely your own, from an intimate mehendi evening to a wedding for two thousand. We believe true luxury is a day your family remembers for ever.</p>
+      <a class="pill" href="./enquiry.html" data-reveal>Plan your celebration<span class="pill-arrow" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4"/></svg></span></a>
+    </div>
+    <div class="intro-media">
+      <figure class="intro-back" data-speed="-0.06"><img src="./story/teal-flowers.webp" alt="White hydrangeas in a gold vase against a teal panelled wall" loading="lazy" decoding="async" width="1122" height="1402"></figure>
+      <figure class="intro-front" data-speed="0.07"><img src="./story/bride-mirror.webp" alt="A bride in red reflected in a gilded mirror as her parents set her veil" loading="lazy" decoding="async" width="1122" height="1402"></figure>
+    </div>
+  </section>
+
+  <!-- The halls: card slider (Red Dot style), filled in by src/halls/slider.ts -->
+  <section class="halls-slider" id="halls" data-tone="dark" aria-roledescription="carousel" aria-label="The halls"></section>
+
+  <!-- This way for ideas: by occasion / by space (Red Dot style), filled in by src/ideas.ts -->
+  <section class="ideas" id="ideas" data-tone="light" aria-label="Ideas for your celebration"></section>
+
+  <!-- Video that opens up to full screen as you scroll (Red Dot style); see src/video.ts -->
+  <section class="grow-video" id="grow-video" data-tone="light" aria-label="Celestia at dusk">
+    <div class="grow-video__container">
+      <video muted loop playsinline preload="none" poster="./video/celestia-poster.jpg" data-src="/video/celestia.mp4" aria-hidden="true"></video>
+    </div>
+  </section>
+
+  <!-- Closing sections (Red Dot style, in Celestia green), filled in by src/finale.ts -->
+  <section class="journey" id="journey" data-tone="dark" aria-label="Guest rooms"></section>
+  <section class="spaces" id="spaces" data-tone="light" aria-label="Featured spaces"></section>
+  <section class="plan-cta" id="plan" data-tone="light" aria-label="Plan your celebration"></section>
+</main>
+<footer class="site-footer" id="site-footer" data-tone="dark"></footer>
+
+<div id="credits"><span id="mapcredit">Imagery © <a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noopener">Mapbox</a> © <a href="https://www.maxar.com/" target="_blank" rel="noopener">Maxar</a> © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a></span><span>Planet textures © <a href="https://www.solarsystemscope.com/textures/" target="_blank" rel="noopener">Solar System Scope</a> (CC BY 4.0) · NASA</span></div>
+
+<noscript><div>Celestia Banquets<br>Nagpur</div></noscript>
+
+</body>
+</html>
