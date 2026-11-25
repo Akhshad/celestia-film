@@ -40,7 +40,7 @@ export function initStory() {
     document.body.classList.toggle('past-journey', top < innerHeight);
     // dark header text only while a light section sits under the header
     let light = false;
-    if (top < headH * .5) for (const sec of after.querySelectorAll<HTMLElement>('[data-tone]')) {
+    if (top < headH * .5) for (const sec of document.querySelectorAll<HTMLElement>('[data-tone]')) {
       const r = sec.getBoundingClientRect();
       if (r.top <= headH * .5 && r.bottom > headH * .5) { light = sec.dataset.tone === 'light'; break; }
     }

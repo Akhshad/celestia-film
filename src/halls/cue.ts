@@ -120,7 +120,7 @@ export class Cue {
       <div class="ex-cue__copy">
         <span class="ex-cue__eyebrow">The halls</span>
         <span class="ex-cue__rule" aria-hidden="true"></span>
-        <h3 class="ex-cue__headline">Eight floors.<br><em>Every celebration.</em></h3>
+        <h3 class="ex-cue__headline">An address<br><em>for the extraordinary.</em></h3>
         <p class="ex-cue__action">${coarse ? 'Tap' : 'Click'} the building · choose a level</p>
       </div>`;
     this.boxArt(this.el.querySelector<SVGSVGElement>('.ex-cue__art')!);

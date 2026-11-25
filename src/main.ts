@@ -15,6 +15,8 @@ import { Film } from './film/film';
 import { Explorer } from './halls/explorer';
 import { initStory } from './story';
 import { initIdeas } from './ideas';
+import { initGrowVideo } from './video';
+import { initFinale } from './finale';
 import { initHallSlider } from './halls/slider';
 type ThreeMod = typeof import('./three/index');
 
@@ -154,6 +156,9 @@ addEventListener('scroll', readScroll, { passive: true });
 new ResizeObserver(() => resize()).observe(stage);
 readScroll(); pS = pT;
 initIdeas(document.getElementById('ideas'));
+initFinale();
+// the video sets its section's header tone, so it updates before the header check in initStory
+initGrowVideo(document.getElementById('grow-video'));
 initStory();
 initHallSlider(document.getElementById('halls'));
 // debug hook: window.__celestia.setP(0.9) jumps to a point in the journey
